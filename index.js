@@ -1,39 +1,34 @@
-var co = require('co');
-var each = require('co-each');
-var methods = require('methods');
+var co = require('co')
+var methods = require('methods')
+var slice = Array.prototype.slice
 
-var isGenerator = function(f) {
-	return typeof f === 'function' && Object.getPrototypeOf(f) !== Object.getPrototypeOf(Function);
-};
+function isGenerator (v) {
+  return typeof v === 'function' && 'GeneratorFunction' === v.constructor.name
+}
 
-var getErrorHandler = function(next) {
-	return function(err) {
-		if (err) next(err);
+function convert (v) {
+	return ! isGenerator(v) ? v : function (req, res, next) {
+		co(v).call(this, req, res, function (err) {
+			if ( ! res.finished) next(err)
+		})
 	}
-};
+}
 
-var getMiddleware = function (gen) {
-	return !isGenerator(gen) ? gen : function (req, res, next) {
-		var args = Array.prototype.slice.call(arguments);
-		return co(gen).apply(null, args.concat(getErrorHandler(next)));
-	};
-};
-
-var routeWrapper = function (route, context) {
-	return function (path) {
-		var generators = Array.prototype.slice.call(arguments, 1);
-		return route.apply(context, [path].concat(each(generators, getMiddleware)));
-	};
-};
+function wrap (route) {
+  return function () {
+    var args = slice.call(arguments)
+    return route.apply(this, args.map(convert))
+  }
+}
 
 module.exports = function (app) {
-	for (var i = 0; i < methods.length; i++) {
-		var method = methods[i];
-		app[method] = routeWrapper(app[method], app);
-	}
-	
-	app.param = routeWrapper(app.param, app);
-	app.del = app.delete;
+  methods.forEach(function (method) {
+    app[method] = wrap(app[method])
+  })
 
-	return app;
-};
+  app.param = wrap(app.param)
+  app.use = wrap(app.use)
+  app.del = app.delete
+
+  return app
+}
