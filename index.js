@@ -28,6 +28,7 @@ module.exports = function (app) {
 
   app.param = wrap(app.param)
   app.use = wrap(app.use)
+  app.all = wrap(app.all)
   app.del = app.delete
 
   return app
