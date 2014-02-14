@@ -8,8 +8,20 @@ function isGenerator (v) {
 
 function convert (v) {
 	return ! isGenerator(v) ? v : function (req, res, next) {
+    function wrapper (method) {
+      return function () {
+        this.sent = true
+        method.apply(this, arguments)
+      }
+    }
+
+    res.render = wrapper(res.render)
+    res.send = wrapper(res.send)
+
 		co(v).call(this, req, res, function (err) {
-			if ( ! res.finished) next(err)
+      setImmediate(function () {
+        if ( ! res.sent) next(err)
+      })
 		})
 	}
 }
